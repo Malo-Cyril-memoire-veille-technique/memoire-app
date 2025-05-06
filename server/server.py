@@ -131,9 +131,10 @@ def handle_client(conn):
                 conn.sendall(json.dumps({"status": "error", "message": "unauthorized"}).encode())
                 return
             msgs = load_json(MESSAGES_FILE)
-            user_msgs = msgs.pop(user, [])
-            save_json(MESSAGES_FILE, msgs)
+            user_msgs = msgs.get(user, [])
             conn.sendall(json.dumps({"status": "ok", "messages": user_msgs}).encode())
+
+
 
         elif action == "get_key":
             token = req.get("token")

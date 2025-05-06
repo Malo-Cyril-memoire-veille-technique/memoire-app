@@ -1,21 +1,26 @@
-# client/client.py
 import socket
 import os
 import json
-import sys
 import getpass
+import threading
+import time
+import sys
+from datetime import datetime
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 
 HOST = 'server'
 PORT = 5000
 KEY_FOLDER = 'keys'
+HISTORY_FOLDER = 'history'
 os.makedirs(KEY_FOLDER, exist_ok=True)
+os.makedirs(HISTORY_FOLDER, exist_ok=True)
 
 session_token = None
 username = ""
 priv_key_path = ""
 pub_key_path = ""
+running = True
 
 def send_request(data):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -37,7 +42,6 @@ def create_account():
         print("[INFO] Compte créé avec succès.")
     else:
         print("[ERREUR] Impossible de créer le compte :", result.get("message"))
-
 
 def login():
     global username, session_token, priv_key_path, pub_key_path
@@ -99,37 +103,168 @@ def get_key(target):
         return result.get("key")
     return None
 
-def send_message():
-    to = input("Envoyer à : ")
-    plaintext = input("Message : ")
-    key_pem = get_key(to)
-    if not key_pem:
-        print("[ERROR] Clé du destinataire introuvable.")
-        return
-    public_key = serialization.load_pem_public_key(key_pem.encode())
-    ciphertext = public_key.encrypt(
-        plaintext.encode(),
-        padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
-    )
-    send_request({"action": "send_message", "token": session_token, "to": to, "message": ciphertext.hex()})
-
-def receive_messages():
+def get_conversation_partners():
     private_key, _ = load_keys()
     raw = send_request({"action": "get_messages", "token": session_token})
     result = json.loads(raw)
     if result.get("status") != "ok":
-        print("[ERREUR]", result.get("message"))
-        return
+        return []
     messages = result.get("messages", [])
+    partners = set()
     for msg in messages:
         try:
             decrypted = private_key.decrypt(
                 bytes.fromhex(msg),
                 padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+            ).decode()
+            if decrypted.startswith("FROM:"):
+                parts = decrypted.split(":", 3)
+                if len(parts) == 4:
+                    partners.add(parts[1].strip())
+        except:
+            continue
+    return sorted(partners)
+
+def save_sent_message(recipient, timestamp, text):
+    path = os.path.join(HISTORY_FOLDER, f"{username}_to_{recipient}.json")
+    try:
+        with open(path, 'r') as f:
+            data = json.load(f)
+    except:
+        data = []
+    data.append({"timestamp": timestamp, "sender": username, "text": text})
+    with open(path, 'w') as f:
+        json.dump(data, f)
+
+def save_received_message(sender, timestamp, text):
+    path = os.path.join(HISTORY_FOLDER, f"{sender}_to_{username}.json")
+    try:
+        with open(path, 'r') as f:
+            data = json.load(f)
+    except:
+        data = []
+    data.append({"timestamp": timestamp, "sender": sender, "text": text})
+    with open(path, 'w') as f:
+        json.dump(data, f)
+
+def load_sent_messages(recipient):
+    path = os.path.join(HISTORY_FOLDER, f"{username}_to_{recipient}.json")
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except:
+        return []
+
+def load_sent_messages_from(sender):
+    path = os.path.join(HISTORY_FOLDER, f"{sender}_to_{username}.json")
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except:
+        return []
+
+def fetch_live_messages(target):
+    global running
+    private_key, _ = load_keys()
+    seen_path = os.path.join(HISTORY_FOLDER, f"seen_{username}_from_{target}.json")
+    try:
+        with open(seen_path, 'r') as f:
+            seen = set(json.load(f))
+    except:
+        seen = set()
+
+    while running:
+        raw = send_request({"action": "get_messages", "token": session_token})
+        result = json.loads(raw)
+        if result.get("status") == "ok":
+            messages = result.get("messages", [])
+            for msg in messages:
+                if msg in seen:
+                    continue
+                try:
+                    decrypted = private_key.decrypt(
+                        bytes.fromhex(msg),
+                        padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                     algorithm=hashes.SHA256(), label=None)
+                    ).decode()
+                    if decrypted.startswith("FROM:"):
+                        parts = decrypted.split(":", 3)
+                        sender = parts[1].strip()
+                        timestamp = int(parts[2].strip())
+                        text = parts[3].strip()
+                        if sender == target:
+                            # Efface la ligne de saisie et imprime le message
+                            sys.stdout.write('\r' + ' ' * 80 + '\r')
+                            print(f"[{datetime.fromtimestamp(timestamp).strftime('%H:%M')}] {sender} : {text}")
+                            sys.stdout.write(f"{username} > ")
+                            print('\a', end='')
+                            sys.stdout.flush()
+                            save_received_message(sender, timestamp, text)
+                            seen.add(msg)
+                except:
+                    continue
+
+            with open(seen_path, 'w') as f:
+                json.dump(list(seen), f)
+        time.sleep(1)
+
+def chat_session(target):
+    global running
+    print(f"\n[Conversation avec {target}] (tape 'exit' pour quitter)")
+    key_pem = get_key(target)
+    if not key_pem:
+        print("[ERREUR] Clé du destinataire introuvable.")
+        return
+    public_key = serialization.load_pem_public_key(key_pem.encode())
+
+    messages = load_sent_messages(target) + load_sent_messages_from(target)
+    messages.sort(key=lambda m: m['timestamp'])
+    for msg in messages:
+        t = datetime.fromtimestamp(msg["timestamp"]).strftime("%H:%M")
+        label = "moi" if msg["sender"] == username else msg["sender"]
+        print(f"[{t}] {label} : {msg['text']}")
+
+    running = True
+    listener = threading.Thread(target=fetch_live_messages, args=(target,), daemon=True)
+    listener.start()
+
+    try:
+        while True:
+            msg = input(f"{username} > ")
+            if msg.lower() == 'exit':
+                break
+            now = int(datetime.now().timestamp())
+            full_message = f"FROM:{username}:{now}:{msg}"
+            ciphertext = public_key.encrypt(
+                full_message.encode(),
+                padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
             )
-            print("[RECU]", decrypted.decode())
-        except Exception as e:
-            print("[ERREUR] Impossible de déchiffrer :", str(e))
+            send_request({"action": "send_message", "token": session_token, "to": target, "message": ciphertext.hex()})
+            print(f"[{datetime.fromtimestamp(now).strftime('%H:%M')}] moi : {msg}")
+            save_sent_message(target, now, msg)
+    finally:
+        running = False
+        listener.join()
+
+def discussion_menu():
+    while True:
+        print("\n--- DISCUSSIONS ---")
+        partners = get_conversation_partners()
+        for i, partner in enumerate(partners):
+            print(f"{i + 1}. {partner}")
+        print("c. Nouvelle conversation")
+        print("q. Retour")
+
+        choice = input("> ").strip().lower()
+        if choice == 'q':
+            break
+        elif choice == 'c':
+            target = input("Nom de l'utilisateur : ").strip()
+            chat_session(target)
+        elif choice.isdigit() and 1 <= int(choice) <= len(partners):
+            chat_session(partners[int(choice) - 1])
+        else:
+            print("[ERREUR] Choix invalide.")
 
 def main_menu():
     while True:
@@ -142,7 +277,6 @@ def main_menu():
             create_account()
         elif choice == '2':
             if login():
-                load_keys()
                 user_menu()
         elif choice == '3':
             break
@@ -152,15 +286,12 @@ def main_menu():
 def user_menu():
     while True:
         print(f"\n[CLIENT: {username}] Menu")
-        print("1. Envoyer un message")
-        print("2. Lire mes messages")
-        print("3. Me déconnecter")
+        print("1. Discussions")
+        print("2. Me déconnecter")
         choice = input("> ")
         if choice == '1':
-            send_message()
+            discussion_menu()
         elif choice == '2':
-            receive_messages()
-        elif choice == '3':
             logout()
             print("[INFO] Déconnecté.")
             break
