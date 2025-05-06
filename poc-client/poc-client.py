@@ -9,7 +9,7 @@ from datetime import datetime
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 
-HOST = 'server'
+HOST = 'poc-server'
 PORT = 5000
 KEY_FOLDER = 'keys'
 HISTORY_FOLDER = 'history'

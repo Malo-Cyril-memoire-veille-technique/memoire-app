@@ -1,35 +1,35 @@
 services:
-  server:
-    build: ./server
+  poc-server:
+    build: ./poc-server
     container_name: secure_server
     volumes:
-      - ./server/data:/app/data
+      - ./poc-server/data:/app/data
     networks:
       - secure_net
     ports:
       - "5000:5000"
 
   client_a:
-    build: ./client
+    build: ./poc-client
     container_name: client_a
     volumes:
-      - ./client/keys/a:/app/keys
+      - ./poc-client/keys/a:/app/keys
     networks:
       - secure_net
     depends_on:
-      - server
+      - poc-server
     stdin_open: true
     tty: true
 
   client_b:
-    build: ./client
+    build: ./poc-client
     container_name: client_b
     volumes:
-      - ./client/keys/b:/app/keys
+      - ./poc-client/keys/b:/app/keys
     networks:
       - secure_net
     depends_on:
-      - server
+      - poc-server
     stdin_open: true
     tty: true
 

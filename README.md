@@ -5,14 +5,10 @@
 ### Terminal 1 (server)
 ```sh
 # Sur powershell
-docker-compose build server ; docker-compose run --rm -it server sh 
-# Puis dans le shell avec un # pour executer le script (a voir si je peux pas l'automatiser)
-python server.py
+docker-compose build poc-server ; docker-compose run --rm -it poc-server
 
 # ---------- Sinon linux
-docker-compose build server && docker-compose run --rm -it server sh
-# Puis pareil pour executer le script
-python server.py
+docker-compose build poc-server && docker-compose run --rm -it poc-server
 ```
 
 Si tout est ok c'est censé afficher : `[SERVER] Listening on 0.0.0.0:5000`
