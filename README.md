@@ -26,3 +26,9 @@ docker-compose run client_a
 ```sh
 docker-compose run client_b
 ```
+
+
+
+### Docker down
+
+`docker compose down` pour arrêter les containers

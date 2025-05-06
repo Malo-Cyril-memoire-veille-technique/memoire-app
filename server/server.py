@@ -3,6 +3,7 @@ import threading
 import os
 import json
 import uuid
+import hashlib
 
 HOST = '0.0.0.0'
 PORT = 5000
@@ -40,24 +41,48 @@ def handle_client(conn):
 
         action = req.get("action")
 
-        if action == "login":
+        if action == "register":
             username = req.get("username")
             password = req.get("password")
             if not username or not password:
                 conn.sendall(json.dumps({"status": "error", "message": "missing credentials"}).encode())
                 return
+
             users = load_json(USERS_FILE)
             if username in users:
-                if users[username] != password:
-                    conn.sendall(json.dumps({"status": "error", "message": "invalid password"}).encode())
-                    return
-            else:
-                users[username] = password
-                save_json(USERS_FILE, users)
+                conn.sendall(json.dumps({"status": "error", "message": "username already exists"}).encode())
+                return
+
+            hashed_pw = hashlib.sha256(password.encode()).hexdigest()
+            users[username] = hashed_pw
+            save_json(USERS_FILE, users)
+
+            conn.sendall(json.dumps({"status": "ok", "message": "user created"}).encode())
+
+        elif action == "login":
+            username = req.get("username")
+            password = req.get("password")
+            if not username or not password:
+                conn.sendall(json.dumps({"status": "error", "message": "missing credentials"}).encode())
+                return
+
+            users = load_json(USERS_FILE)
+            hashed_input = hashlib.sha256(password.encode()).hexdigest()
+
+            if username not in users:
+                conn.sendall(json.dumps({"status": "error", "message": "unknown user"}).encode())
+                return
+
+            stored_hash = users[username]
+            if hashed_input != stored_hash:
+                conn.sendall(json.dumps({"status": "error", "message": "invalid password"}).encode())
+                return
+
             sessions = load_json(SESSIONS_FILE)
             token = str(uuid.uuid4())
             sessions[token] = username
             save_json(SESSIONS_FILE, sessions)
+
             conn.sendall(json.dumps({"status": "ok", "token": token}).encode())
 
         elif action == "logout":

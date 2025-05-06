@@ -27,13 +27,17 @@ def create_account():
     global username
     username = input("Créer un nom d'utilisateur : ").strip()
     password = getpass.getpass("Créer un mot de passe : ").strip()
-    response = send_request({"action": "login", "username": username, "password": password})
-    print("[DEBUG] Réponse brute :", response)
-    result = json.loads(response)
+    response = send_request({"action": "register", "username": username, "password": password})
+    try:
+        result = json.loads(response)
+    except json.JSONDecodeError:
+        print("[ERREUR] Réponse non valide du serveur :", response)
+        return
     if result.get("status") == "ok":
         print("[INFO] Compte créé avec succès.")
     else:
         print("[ERREUR] Impossible de créer le compte :", result.get("message"))
+
 
 def login():
     global username, session_token, priv_key_path, pub_key_path
@@ -49,6 +53,9 @@ def login():
         session_token = result.get("token")
         priv_key_path = os.path.join(KEY_FOLDER, f"{username}_private.pem")
         pub_key_path = os.path.join(KEY_FOLDER, f"{username}_public.pem")
+        load_keys()
+        register_key()
+        print("[INFO] Clé publique automatiquement enregistrée.")
         return True
     else:
         print("[ERREUR] Échec de la connexion :", result.get("message"))
@@ -145,19 +152,15 @@ def main_menu():
 def user_menu():
     while True:
         print(f"\n[CLIENT: {username}] Menu")
-        print("1. Enregistrer ma clé publique")
-        print("2. Envoyer un message")
-        print("3. Lire mes messages")
-        print("4. Me déconnecter")
+        print("1. Envoyer un message")
+        print("2. Lire mes messages")
+        print("3. Me déconnecter")
         choice = input("> ")
         if choice == '1':
-            register_key()
-            print("[INFO] Clé enregistrée sur le serveur.")
-        elif choice == '2':
             send_message()
-        elif choice == '3':
+        elif choice == '2':
             receive_messages()
-        elif choice == '4':
+        elif choice == '3':
             logout()
             print("[INFO] Déconnecté.")
             break
