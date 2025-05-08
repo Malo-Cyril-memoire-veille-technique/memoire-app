@@ -23,12 +23,19 @@ pub_key_path = ""
 running = True
 
 def send_request(data):
+    """
+    Envoie une requête au serveur et retourne la réponse.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
         s.sendall(json.dumps(data).encode())
         return s.recv(8192).decode()
 
 def create_account():
+    """
+    Crée un compte utilisateur sur le serveur.
+    Demande un nom d'utilisateur et un mot de passe.
+    """
     global username
     username = input("Créer un nom d'utilisateur : ").strip()
     password = getpass.getpass("Créer un mot de passe : ").strip()
@@ -44,6 +51,9 @@ def create_account():
         print("[ERREUR] Impossible de créer le compte :", result.get("message"))
 
 def login():
+    """
+    Connexion de l'utilisateur et récupération du token de session.
+    """
     global username, session_token, priv_key_path, pub_key_path
     username = input("Nom d'utilisateur : ").strip()
     password = getpass.getpass("Mot de passe : ").strip()
@@ -66,11 +76,17 @@ def login():
         return False
 
 def logout():
+    """
+    Déconnexion de l'utilisateur et suppression du token de session.
+    """
     global session_token
     send_request({"action": "logout", "token": session_token})
     session_token = None
 
 def generate_keys():
+    """
+    Génère une paire de clés RSA et les enregistre dans des fichiers PEM.
+    """
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     with open(priv_key_path, 'wb') as f:
         f.write(private_key.private_bytes(
@@ -84,6 +100,10 @@ def generate_keys():
             format=serialization.PublicFormat.SubjectPublicKeyInfo))
 
 def load_keys():
+    """
+    Charge les clés privées et publiques de l'utilisateur.
+    Si elles n'existent pas, elles sont générées.
+    """
     if not os.path.exists(priv_key_path) or not os.path.exists(pub_key_path):
         generate_keys()
     with open(priv_key_path, 'rb') as f:
@@ -93,10 +113,16 @@ def load_keys():
     return private_key, public_key
 
 def register_key():
+    """
+    Enregistre la clé publique de l'utilisateur sur le serveur.
+    """
     _, pub_key_str = load_keys()
     send_request({"action": "register_key", "token": session_token, "public_key": pub_key_str})
 
 def get_key(target):
+    """
+    Récupère la clé publique d'un utilisateur à partir du serveur.
+    """
     response = send_request({"action": "get_key", "token": session_token, "target": target})
     result = json.loads(response)
     if result.get("status") == "ok":
@@ -109,23 +135,31 @@ def get_conversation_partners():
     result = json.loads(raw)
     if result.get("status") != "ok":
         return []
+
     messages = result.get("messages", [])
     partners = set()
-    for msg in messages:
+
+    for item in messages:
         try:
+            ciphertext = bytes.fromhex(item["message"])
             decrypted = private_key.decrypt(
-                bytes.fromhex(msg),
+                ciphertext,
                 padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
             ).decode()
+
             if decrypted.startswith("FROM:"):
                 parts = decrypted.split(":", 3)
                 if len(parts) == 4:
                     partners.add(parts[1].strip())
         except:
             continue
+
     return sorted(partners)
 
 def save_sent_message(recipient, timestamp, text):
+    """
+    Enregistre un message envoyé dans l'historique.
+    """
     path = os.path.join(HISTORY_FOLDER, f"{username}_to_{recipient}.json")
     try:
         with open(path, 'r') as f:
@@ -137,6 +171,9 @@ def save_sent_message(recipient, timestamp, text):
         json.dump(data, f)
 
 def save_received_message(sender, timestamp, text):
+    """
+    Enregistre un message reçu dans l'historique.
+    """
     path = os.path.join(HISTORY_FOLDER, f"{sender}_to_{username}.json")
     try:
         with open(path, 'r') as f:
@@ -148,6 +185,9 @@ def save_received_message(sender, timestamp, text):
         json.dump(data, f)
 
 def load_sent_messages(recipient):
+    """
+    Charge les messages envoyés à un destinataire à partir de l'historique.
+    """
     path = os.path.join(HISTORY_FOLDER, f"{username}_to_{recipient}.json")
     try:
         with open(path, 'r') as f:
@@ -156,6 +196,9 @@ def load_sent_messages(recipient):
         return []
 
 def load_sent_messages_from(sender):
+    """
+    Charge les messages envoyés par un expéditeur à partir de l'historique.
+    """
     path = os.path.join(HISTORY_FOLDER, f"{sender}_to_{username}.json")
     try:
         with open(path, 'r') as f:
@@ -178,29 +221,45 @@ def fetch_live_messages(target):
         result = json.loads(raw)
         if result.get("status") == "ok":
             messages = result.get("messages", [])
-            for msg in messages:
-                if msg in seen:
+            for item in messages:
+                raw_message = json.dumps(item)  # serialize for seen tracking
+                if raw_message in seen:
                     continue
                 try:
+                    ciphertext = bytes.fromhex(item["message"])
+                    signature = bytes.fromhex(item["signature"])
+
                     decrypted = private_key.decrypt(
-                        bytes.fromhex(msg),
-                        padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                     algorithm=hashes.SHA256(), label=None)
+                        ciphertext,
+                        padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
                     ).decode()
+
                     if decrypted.startswith("FROM:"):
                         parts = decrypted.split(":", 3)
                         sender = parts[1].strip()
                         timestamp = int(parts[2].strip())
                         text = parts[3].strip()
+
+                        sender_key_pem = get_key(sender)
+                        if not sender_key_pem:
+                            continue
+                        sender_public_key = serialization.load_pem_public_key(sender_key_pem.encode())
+
+                        sender_public_key.verify(
+                            signature,
+                            decrypted.encode(),
+                            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+                            hashes.SHA256()
+                        )
+
                         if sender == target:
-                            # Efface la ligne de saisie et imprime le message
                             sys.stdout.write('\r' + ' ' * 80 + '\r')
                             print(f"[{datetime.fromtimestamp(timestamp).strftime('%H:%M')}] {sender} : {text}")
                             sys.stdout.write(f"{username} > ")
                             print('\a', end='')
                             sys.stdout.flush()
                             save_received_message(sender, timestamp, text)
-                            seen.add(msg)
+                            seen.add(raw_message)
                 except:
                     continue
 
@@ -209,7 +268,12 @@ def fetch_live_messages(target):
         time.sleep(1)
 
 def chat_session(target):
+    """
+    Gère une session de discussion avec un utilisateur donné.
+    Affiche les messages précédents et permet d'envoyer de nouveaux messages.
+    """
     global running
+    private_key, _ = load_keys()
     print(f"\n[Conversation avec {target}] (tape 'exit' pour quitter)")
     key_pem = get_key(target)
     if not key_pem:
@@ -234,19 +298,46 @@ def chat_session(target):
             if msg.lower() == 'exit':
                 break
             now = int(datetime.now().timestamp())
+
             full_message = f"FROM:{username}:{now}:{msg}"
+
+            # Signature du message clair
+            signature = private_key.sign(
+                full_message.encode(),
+                padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+                hashes.SHA256()
+            )
+
+            # Chiffrement du message clair
             ciphertext = public_key.encrypt(
                 full_message.encode(),
                 padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
             )
-            send_request({"action": "send_message", "token": session_token, "to": target, "message": ciphertext.hex()})
+
+            # Envoi structuré avec message chiffré + signature
+            payload = {
+                "message": ciphertext.hex(),
+                "signature": signature.hex()
+            }
+
+            send_request({
+                "action": "send_message",
+                "token": session_token,
+                "to": target,
+                "message": json.dumps(payload)
+            })
+
             print(f"[{datetime.fromtimestamp(now).strftime('%H:%M')}] moi : {msg}")
             save_sent_message(target, now, msg)
     finally:
         running = False
         listener.join()
 
+
 def discussion_menu():
+    """
+    Affiche le menu des discussions et permet de choisir une conversation.
+    """
     while True:
         print("\n--- DISCUSSIONS ---")
         partners = get_conversation_partners()
@@ -267,6 +358,9 @@ def discussion_menu():
             print("[ERREUR] Choix invalide.")
 
 def main_menu():
+    """
+    Affiche le menu principal et gère la création de compte et la connexion.
+    """
     while True:
         print("\n--- MENU PRINCIPAL ---")
         print("1. Créer un compte")
@@ -284,6 +378,9 @@ def main_menu():
             print("[ERREUR] Choix invalide.")
 
 def user_menu():
+    """
+    Affiche le menu utilisateur après connexion.
+    """
     while True:
         print(f"\n[CLIENT: {username}] Menu")
         print("1. Discussions")

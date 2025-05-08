@@ -25,6 +25,21 @@ docker-compose run client_b
 
 
 
-### Docker down
+### Arrêter / Supprimer les containers et images
 
-`docker compose down` pour arrêter les containers
+```sh
+# Arrêt des conteneurs
+docker stop poc-server poc-client-a poc-client-b
+
+# Suppression des conteneurs
+docker rm poc-server poc-client-a poc-client-b
+
+# Suppression des images
+docker rmi poc-server poc-client-a poc-client-b
+
+# Suppression des volumes anonymes (optionnel)
+docker volume prune -f
+
+# Suppression du réseau personnalisé (remplace 'poc-net' si besoin)
+docker network rm poc-net
+```
