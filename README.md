@@ -28,14 +28,22 @@ docker-compose run client_b
 ### Arrêter / Supprimer les containers et images
 
 ```sh
+# A CHANGER PARCE QUE PAS BON
+# Containers 
+
+# Images
+# memoire-app-poc-server:latest
+# memoire-app-client_a:latest
+# memoire-app-client_b:latest
+
 # Arrêt des conteneurs
-docker stop poc-server poc-client-a poc-client-b
+docker stop poc-server client-a client-b
 
 # Suppression des conteneurs
-docker rm poc-server poc-client-a poc-client-b
+docker rm poc-server client-a client-b
 
 # Suppression des images
-docker rmi poc-server poc-client-a poc-client-b
+docker rmi poc-server client-a client-b
 
 # Suppression des volumes anonymes (optionnel)
 docker volume prune -f

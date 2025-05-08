@@ -6,6 +6,7 @@ import threading
 import time
 import sys
 from datetime import datetime
+import hashlib
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 
@@ -15,6 +16,8 @@ KEY_FOLDER = 'keys'
 HISTORY_FOLDER = 'history'
 os.makedirs(KEY_FOLDER, exist_ok=True)
 os.makedirs(HISTORY_FOLDER, exist_ok=True)
+KNOWN_KEYS_FOLDER = 'known_keys'
+os.makedirs(KNOWN_KEYS_FOLDER, exist_ok=True)
 
 session_token = None
 username = ""
@@ -121,13 +124,43 @@ def register_key():
 
 def get_key(target):
     """
-    Récupère la clé publique d'un utilisateur à partir du serveur.
+    Récupère la clé publique du serveur, la compare à celle connue (si existante),
+    et alerte en cas de modification (protection MITM).
     """
     response = send_request({"action": "get_key", "token": session_token, "target": target})
     result = json.loads(response)
-    if result.get("status") == "ok":
-        return result.get("key")
-    return None
+    if result.get("status") != "ok":
+        return None
+
+    server_key = result.get("key")
+    key_path = os.path.join(KNOWN_KEYS_FOLDER, f"{target}.pem")
+
+    # Si on connaît déjà cette clé, on vérifie qu'elle n'a pas changé
+    if os.path.exists(key_path):
+        with open(key_path, 'r') as f:
+            known_key = f.read()
+        if known_key != server_key:
+            # Fingerprint pour info
+            import hashlib
+            new_fp = hashlib.sha256(server_key.encode()).hexdigest().upper()
+            old_fp = hashlib.sha256(known_key.encode()).hexdigest().upper()
+            print(f"\n⚠️ AVERTISSEMENT : La clé publique de {target} a changé !")
+            print(f"Ancienne empreinte : {':'.join(old_fp[i:i+2] for i in range(0, len(old_fp), 2))}")
+            print(f"Nouvelle empreinte : {':'.join(new_fp[i:i+2] for i in range(0, len(new_fp), 2))}")
+            choice = input("Accepter cette nouvelle clé ? (o/n) : ").strip().lower()
+            if choice != 'o':
+                print("[INFO] Connexion annulée.")
+                return None
+            else:
+                with open(key_path, 'w') as f:
+                    f.write(server_key)
+    else:
+        # Nouvelle clé, on enregistre
+        with open(key_path, 'w') as f:
+            f.write(server_key)
+
+    return server_key
+
 
 def get_conversation_partners():
     private_key, _ = load_keys()
@@ -207,6 +240,9 @@ def load_sent_messages_from(sender):
         return []
 
 def fetch_live_messages(target):
+    """
+    Récupère les messages en temps réel pour un utilisateur donné.
+    """
     global running
     private_key, _ = load_keys()
     seen_path = os.path.join(HISTORY_FOLDER, f"seen_{username}_from_{target}.json")
@@ -241,6 +277,10 @@ def fetch_live_messages(target):
                         text = parts[3].strip()
 
                         sender_key_pem = get_key(sender)
+                        key_bytes = sender_key_pem.encode()
+                        fp = hashlib.sha256(key_bytes).hexdigest().upper()
+                        formatted_fp = ':'.join(fp[i:i+2] for i in range(0, len(fp), 2))
+                        print(f"Empreinte SHA-256 de la clé publique de {target} :\n{formatted_fp}")
                         if not sender_key_pem:
                             continue
                         sender_public_key = serialization.load_pem_public_key(sender_key_pem.encode())

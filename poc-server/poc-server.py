@@ -22,24 +22,24 @@ for file in [USERS_FILE, SESSIONS_FILE, KEYS_FILE, MESSAGES_FILE]:
 
 def load_json(path):
     """
-    Load JSON data from a file. If the file does not exist, return an empty dictionary.
-    If the file is empty, return an empty dictionary.
+    Charger les données JSON à partir d'un fichier. Si le fichier n'existe pas, renvoyer un dictionnaire vide.
+    Si le fichier est vide, renvoyer un dictionnaire vide.
     """
     with open(path, 'r') as f:
         return json.load(f)
 
 def save_json(path, data):
     """
-    Save JSON data to a file. If the file does not exist, create it.
-    If the file is empty, create it.
+    Enregistrer les données JSON dans un fichier. Si le fichier n'existe pas, le créer.
+    Si le fichier existe, écraser son contenu.
     """
     with open(path, 'w') as f:
         json.dump(data, f)
 
 def handle_client(conn):
     """
-    Handle client connection. This function will be run in a separate thread for each client.
-    It will receive data from the client, process it, and send a response back.
+    Gérer la connexion d'un client. Recevoir les données, traiter la requête et envoyer une réponse.
+    Les actions possibles sont : register, login, logout, register_key, send_message, get_messages, get_key.
     """
     with conn:
         data = conn.recv(8192).decode()
@@ -167,8 +167,7 @@ def handle_client(conn):
 
 def start_server():
     """
-    Start the server and listen for incoming connections.
-    For each connection, spawn a new thread to handle the client.
+    Démarrer le serveur. Écouter les connexions entrantes et créer un thread pour chaque connexion.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT))
