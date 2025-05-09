@@ -4,6 +4,7 @@ import os
 import json
 import uuid
 import hashlib
+import time
 
 HOST = '0.0.0.0'
 PORT = 5000
@@ -125,15 +126,27 @@ def handle_client(conn):
             token = req.get("token")
             to = req.get("to")
             message = req.get("message")
+
             sessions = load_json(SESSIONS_FILE)
             sender = sessions.get(token)
+
             if not sender or not to or not message:
                 conn.sendall(json.dumps({"status": "error", "message": "missing or unauthorized"}).encode())
                 return
+
+            try:
+                parsed_message = json.loads(message)
+            except json.JSONDecodeError:
+                conn.sendall(json.dumps({"status": "error", "message": "invalid message format"}).encode())
+                return
+
+            # Enregistrement du message pour le destinataire
             msgs = load_json(MESSAGES_FILE)
-            msgs.setdefault(to, []).append(json.loads(message))
+            msgs.setdefault(to, []).append(parsed_message)
             save_json(MESSAGES_FILE, msgs)
+
             conn.sendall(json.dumps({"status": "ok"}).encode())
+
 
         elif action == "get_messages":
             token = req.get("token")

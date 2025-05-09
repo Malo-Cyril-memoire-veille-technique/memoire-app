@@ -14,6 +14,7 @@ services:
     container_name: client_a
     volumes:
       - ./poc-client/keys/a:/app/keys
+      - ./authority/keys:/app/authority_keys:ro
     networks:
       - secure_net
     depends_on:
@@ -26,6 +27,7 @@ services:
     container_name: client_b
     volumes:
       - ./poc-client/keys/b:/app/keys
+      - ./authority/keys:/app/authority_keys:ro
     networks:
       - secure_net
     depends_on:
@@ -33,6 +35,19 @@ services:
     stdin_open: true
     tty: true
 
+  authority:
+    build: ./authority
+    container_name: authority
+    volumes:
+      - ./authority/keys:/app/keys
+      - ./authority/state:/app/data/state
+      - ./authority/intercepts:/app/intercepts
+      - ./poc-server/data/messages.json:/app/data/messages.json:ro
+    networks:
+      - secure_net
+    depends_on:
+      - poc-server
+      
 networks:
   secure_net:
     driver: bridge

