@@ -385,7 +385,6 @@ def chat_session(target):
                 "message": json.dumps(payload)
             })
 
-            print(f"[{datetime.fromtimestamp(now).strftime('%H:%M')}] moi : {msg}")
             save_sent_message(target, now, msg)
     finally:
         running = False
