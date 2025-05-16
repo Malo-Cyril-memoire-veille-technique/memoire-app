@@ -4,6 +4,7 @@ services:
     container_name: secure_server
     volumes:
       - ./poc-server/data:/app/data
+      - ./logs:/app/logs
     networks:
       - secure_net
     ports:
@@ -15,6 +16,7 @@ services:
     volumes:
       - ./poc-client/keys/a:/app/keys
       - ./authority/keys:/app/authority_keys:ro
+      - ./logs:/app/logs
     networks:
       - secure_net
     depends_on:
@@ -28,6 +30,7 @@ services:
     volumes:
       - ./poc-client/keys/b:/app/keys
       - ./authority/keys:/app/authority_keys:ro
+      - ./logs:/app/logs
     networks:
       - secure_net
     depends_on:
@@ -43,6 +46,7 @@ services:
       - ./authority/state:/app/data/state
       - ./authority/intercepts:/app/intercepts
       - ./poc-server/data/messages.json:/app/data/messages.json:ro
+      - ./logs:/app/logs
     networks:
       - secure_net
     depends_on:
