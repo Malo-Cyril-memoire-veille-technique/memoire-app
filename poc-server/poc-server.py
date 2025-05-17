@@ -62,7 +62,7 @@ def handle_client(conn):
         try:
             req = json.loads(data)
         except json.JSONDecodeError:
-            logging.error("❌ Requête JSON invalide reçue.")
+            logging.error("Requête JSON invalide reçue.")
             conn.sendall(json.dumps({"status": "error", "message": "invalid json"}).encode())
             return
 
@@ -73,45 +73,45 @@ def handle_client(conn):
         if action == "register":
             username = req.get("username")
             password = req.get("password")
-            logging.info(f"🆕 Tentative d'inscription : {username}")
+            logging.info(f"Tentative d'inscription : {username}")
             if not username or not password:
                 conn.sendall(json.dumps({"status": "error", "message": "missing credentials"}).encode())
                 return
             users = load_json(USERS_FILE)
             if username in users:
-                logging.warning(f"⚠️ Utilisateur déjà existant : {username}")
+                logging.warning(f"Utilisateur déjà existant : {username}")
                 conn.sendall(json.dumps({"status": "error", "message": "username already exists"}).encode())
                 return
             hashed_pw = hashlib.sha256(password.encode()).hexdigest()
             users[username] = hashed_pw
             save_json(USERS_FILE, users)
-            logging.info(f"✅ Inscription réussie pour {username} (hash: {hashed_pw})")
+            logging.info(f"Inscription réussie pour {username} (hash: {hashed_pw})")
             conn.sendall(json.dumps({"status": "ok", "message": "user created"}).encode())
 
         elif action == "login":
             username = req.get("username")
             password = req.get("password")
-            logging.info(f"🔐 Tentative de connexion : {username}")
+            logging.info(f"Tentative de connexion : {username}")
             if not username or not password:
                 conn.sendall(json.dumps({"status": "error", "message": "missing credentials"}).encode())
                 return
             users = load_json(USERS_FILE)
             hashed_input = hashlib.sha256(password.encode()).hexdigest()
-            logging.info(f"🔎 Hash du mot de passe fourni : {hashed_input}")
+            logging.info(f"Hash du mot de passe fourni : {hashed_input}")
             if username not in users:
-                logging.error(f"❌ Utilisateur inconnu : {username}")
+                logging.error(f"Utilisateur inconnu : {username}")
                 conn.sendall(json.dumps({"status": "error", "message": "unknown user"}).encode())
                 return
             if hashed_input != users[username]:
-                logging.error(f"❌ Mauvais mot de passe pour : {username}")
+                logging.error(f"Mauvais mot de passe pour : {username}")
                 conn.sendall(json.dumps({"status": "error", "message": "invalid password"}).encode())
                 return
             sessions = load_json(SESSIONS_FILE)
             token = str(uuid.uuid4())
             sessions[token] = username
             save_json(SESSIONS_FILE, sessions)
-            logging.debug(f"🆔 Token généré pour {username} : {token}")
-            logging.info(f"✅ Connexion réussie pour {username} (token {token})")
+            logging.debug(f"Token généré pour {username} : {token}")
+            logging.info(f"Connexion réussie pour {username} (token {token})")
             conn.sendall(json.dumps({"status": "ok", "token": token}).encode())
 
         elif action == "logout":
@@ -119,7 +119,7 @@ def handle_client(conn):
             sessions = load_json(SESSIONS_FILE)
             user = sessions.pop(token, None)
             if user:
-                logging.info(f"🔓 Déconnexion de : {user}")
+                logging.info(f"Déconnexion de : {user}")
                 keys = load_json(KEYS_FILE)
                 keys.pop(user, None)
                 save_json(KEYS_FILE, keys)
@@ -133,14 +133,14 @@ def handle_client(conn):
             user = sessions.get(token)
             logging.info(f"📥 Requête d’enregistrement de clé publique pour {user}")
             if not user or not public_key:
-                logging.error("❌ Échec enregistrement de clé (token/clé manquant)")
+                logging.error("Échec enregistrement de clé (token/clé manquant)")
                 conn.sendall(json.dumps({"status": "error", "message": "unauthorized or missing key"}).encode())
                 return
             keys = load_json(KEYS_FILE)
             keys[user] = public_key
-            logging.debug(f"🔎 Clé publique reçue (brut PEM) :\n{public_key}")
+            logging.debug(f"Clé publique reçue (brut PEM) :\n{public_key}")
             save_json(KEYS_FILE, keys)
-            logging.info(f"🔑 Clé publique enregistrée pour {user} :\n{public_key}")
+            logging.info(f"Clé publique enregistrée pour {user} :\n{public_key}")
             conn.sendall(json.dumps({"status": "ok"}).encode())
 
         elif action == "send_message":
@@ -150,13 +150,13 @@ def handle_client(conn):
             sessions = load_json(SESSIONS_FILE)
             sender = sessions.get(token)
             if not sender or not to or not message:
-                logging.error("❌ Message refusé (informations manquantes)")
+                logging.error("Message refusé (informations manquantes)")
                 conn.sendall(json.dumps({"status": "error", "message": "missing or unauthorized"}).encode())
                 return
             try:
                 parsed_message = json.loads(message)
             except json.JSONDecodeError:
-                logging.error("❌ Format de message invalide")
+                logging.error("Format de message invalide")
                 conn.sendall(json.dumps({"status": "error", "message": "invalid message format"}).encode())
                 return
 
@@ -167,9 +167,9 @@ def handle_client(conn):
             encryption = parsed_message.get("encryption", "RSA-OAEP")
             signature_algo = parsed_message.get("signature_algo", "RSA-PSS")
 
-            logging.info(f"📤 Nouveau message reçu de {sender} à destination de {to}")
-            logging.debug(f"🔒 Payload brut reçu (str) : {message}")
-            logging.debug("📦 Payload déstructuré (parsed):")
+            logging.info(f"Nouveau message reçu de {sender} à destination de {to}")
+            logging.debug(f"Payload brut reçu (str) : {message}")
+            logging.debug("Payload déstructuré (parsed):")
             logging.debug(f" - ID du message : {msg_id}")
             logging.debug(f" - Méthode de chiffrement : {encryption}")
             logging.debug(f" - Algorithme de signature : {signature_algo}")
@@ -180,7 +180,7 @@ def handle_client(conn):
             msgs = load_json(MESSAGES_FILE)
             msgs.setdefault(to, []).append(parsed_message)
             save_json(MESSAGES_FILE, msgs)
-            logging.info(f"✅ Message stocké pour {to} (ID: {msg_id})")
+            logging.info(f"Message stocké pour {to} (ID: {msg_id})")
             conn.sendall(json.dumps({"status": "ok"}).encode())
 
 
@@ -200,20 +200,20 @@ def handle_client(conn):
             target = req.get("target")
             sessions = load_json(SESSIONS_FILE)
             if token not in sessions:
-                logging.error("❌ Requête get_key rejetée (token invalide)")
+                logging.error("Requête get_key rejetée (token invalide)")
                 conn.sendall(json.dumps({"status": "error", "message": "unauthorized"}).encode())
                 return
             keys = load_json(KEYS_FILE)
             key = keys.get(target)
             if key:
-                logging.info(f"🔍 Clé publique renvoyée pour {target} :\n{key}")
+                logging.info(f"Clé publique renvoyée pour {target} :\n{key}")
                 conn.sendall(json.dumps({"status": "ok", "key": key}).encode())
             else:
-                logging.warning(f"❌ Clé publique introuvable pour {target}")
+                logging.warning(f"Clé publique introuvable pour {target}")
                 conn.sendall(json.dumps({"status": "error", "message": "key not found"}).encode())
 
         else:
-            logging.warning(f"❓ Action inconnue : {action}")
+            logging.warning(f"Action inconnue : {action}")
             conn.sendall(json.dumps({"status": "error", "message": "unknown action"}).encode())
 
 def start_server():
@@ -224,8 +224,8 @@ def start_server():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT))
         s.listen()
-        print(f"🚀 Démarré sur {HOST}:{PORT}")
-        logging.info(f"🚀 Démarré sur {HOST}:{PORT}")
+        print(f"Démarré sur {HOST}:{PORT}")
+        logging.info(f"Démarré sur {HOST}:{PORT}")
         while True:
             conn, _ = s.accept()
             threading.Thread(target=handle_client, args=(conn,), daemon=True).start()

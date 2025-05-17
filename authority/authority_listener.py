@@ -103,7 +103,7 @@ def run_monitor():
             last_seen_hash = new_hash
             with open(LAST_HASH_FILE, "w") as f:
                 f.write(new_hash)
-            logging.info("🆕 Nouvelle série de messages détectée. Analyse en cours...")
+            logging.info("Nouvelle série de messages détectée. Analyse en cours...")
 
             for recipient, messages in all_messages.items():
                 for msg in messages:
@@ -131,21 +131,21 @@ def run_monitor():
                             text = parts[3].strip()
 
                             print(f"[INTERCEPTÉ] {sender}: {text}", flush=True)
-                            logging.info(f"📥 Message intercepté de {sender} à {datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')}")
-                            logging.debug(f"🔓 Contenu déchiffré : {text}")
-                            logging.debug(f"🆔 ID du message : {msg_id}")
-                            logging.debug(f"👤 Destinataire : {recipient}")
+                            logging.info(f"Message intercepté de {sender} à {datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')}")
+                            logging.debug(f"Contenu déchiffré : {text}")
+                            logging.debug(f"ID du message : {msg_id}")
+                            logging.debug(f"Destinataire : {recipient}")
                             save_intercept(sender, timestamp, text)
                             seen_ids.add(msg_id)
                             save_seen_ids(seen_ids)
 
                     except Exception as e:
                         print(f"[ERREUR] Déchiffrement échoué : {e}", flush=True)
-                        logging.error(f"❌ Échec de déchiffrement du message ID {msg.get('id')} : {e}")
+                        logging.error(f"Échec de déchiffrement du message ID {msg.get('id')} : {e}")
                         continue
         time.sleep(3)
 
 if __name__ == "__main__":
     print("[AUTORITÉ] Surveillance des messages démarrée...", flush=True)
-    logging.info("🔎 [AUTORITÉ] Surveillance des messages démarrée...")
+    logging.info("[AUTORITÉ] Surveillance des messages démarrée...")
     run_monitor()

@@ -22,11 +22,11 @@ def generate_keys_if_needed():
     os.makedirs(KEY_DIR, exist_ok=True)
 
     if os.path.exists(PRIVATE_KEY_FILE) and os.path.exists(PUBLIC_KEY_FILE):
-        logging.info("🔐 Clés de l'autorité déjà présentes. Aucune action nécessaire.")
+        logging.info("Clés de l'autorité déjà présentes. Aucune action nécessaire.")
         return
 
     try:
-        logging.info("🛠️ Génération des clés de l'autorité...")
+        logging.info("Génération des clés de l'autorité...")
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
         with open(PRIVATE_KEY_FILE, "wb") as f:
@@ -43,10 +43,10 @@ def generate_keys_if_needed():
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
             ))
 
-        logging.info("✅ Clés de l'autorité générées avec succès.")
+        logging.info("Clés de l'autorité générées avec succès.")
     except Exception as e:
-        logging.error(f"❌ Échec lors de la génération des clés : {e}")
+        logging.error(f"Échec lors de la génération des clés : {e}")
 
 if __name__ == "__main__":
-    logging.info("📌 Lancement du script de génération de clés de l'autorité")
+    logging.info("Lancement du script de génération de clés de l'autorité")
     generate_keys_if_needed()
