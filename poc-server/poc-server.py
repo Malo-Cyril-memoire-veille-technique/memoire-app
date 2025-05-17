@@ -68,7 +68,7 @@ def handle_client(conn):
 
         action = req.get("action")
         if action != "get_messages":
-            logging.info(f"📩 Action reçue : {action}")
+            logging.info(f"Action reçue : {action}")
 
         if action == "register":
             username = req.get("username")
@@ -131,7 +131,7 @@ def handle_client(conn):
             public_key = req.get("public_key")
             sessions = load_json(SESSIONS_FILE)
             user = sessions.get(token)
-            logging.info(f"📥 Requête d’enregistrement de clé publique pour {user}")
+            logging.info(f"Requête d’enregistrement de clé publique pour {user}")
             if not user or not public_key:
                 logging.error("Échec enregistrement de clé (token/clé manquant)")
                 conn.sendall(json.dumps({"status": "error", "message": "unauthorized or missing key"}).encode())
